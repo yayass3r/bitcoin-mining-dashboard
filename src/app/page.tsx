@@ -11,22 +11,6 @@ interface Miner {
   lastShare: string | null
 }
 
-interface Share {
-  id: number
-  worker: string
-  difficulty: number
-  timestamp: string
-  isValid: boolean
-}
-
-interface Block {
-  height: number
-  hash: string
-  miner: string
-  reward: number
-  timestamp: string
-}
-
 interface MiningData {
   wallet: string
   port: number
@@ -38,15 +22,14 @@ interface MiningData {
   hashrate: number
   activeMiners: number
   miners: Miner[]
-  recentShares: Share[]
-  blocks: Block[]
+  recentShares: any[]
+  blocks: any[]
 }
 
 export default function MiningDashboard() {
   const [data, setData] = useState<MiningData | null>(null)
   const [loading, setLoading] = useState(true)
   const [hashHistory, setHashHistory] = useState<number[]>([])
-  const [sharesHistory, setSharesHistory] = useState<number[]>([])
 
   const fetchData = useCallback(async () => {
     try {
@@ -55,7 +38,6 @@ export default function MiningDashboard() {
       if (json.success) {
         setData(json.data)
         setHashHistory(prev => [...prev.slice(-59), json.data.hashrate])
-        setSharesHistory(prev => [...prev.slice(-59), json.data.totalShares])
       }
     } catch (e) {
       console.error('Fetch error:', e)
@@ -139,7 +121,7 @@ export default function MiningDashboard() {
               ⛏️ Bitcoin Mining Pool
             </h1>
             <p style={{ margin: '8px 0 0', color: '#333', fontSize: '14px' }}>
-              Real-time Mining Dashboard
+              Real-time Mining Dashboard - 24/7 Active
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
@@ -156,7 +138,7 @@ export default function MiningDashboard() {
                 fontSize: '14px'
               }}
             >
-              {data?.isRunning ? '⏹️ Stop Mining' : '▶️ Start Mining'}
+              {data?.isRunning ? '⏹️ Stop' : '▶️ Start'}
             </button>
             <button
               onClick={addMiner}
@@ -180,12 +162,12 @@ export default function MiningDashboard() {
       {/* Stats Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
         gap: '16px',
         marginBottom: '20px'
       }}>
         {[
-          { label: ' miners', value: data?.activeMiners || 0, icon: '👷', color: '#22c55e' },
+          { label: 'Active Miners', value: data?.activeMiners || 0, icon: '👷', color: '#22c55e' },
           { label: 'Total Shares', value: data?.totalShares?.toLocaleString() || 0, icon: '⛏️', color: '#f7931a' },
           { label: 'Blocks Found', value: data?.totalBlocks || 0, icon: '🎉', color: '#8b5cf6' },
           { label: 'Hashrate', value: `${(data?.hashrate || 0).toFixed(1)} GH/s`, icon: '💨', color: '#06b6d4' },
@@ -195,18 +177,17 @@ export default function MiningDashboard() {
           <div key={i} style={{
             background: 'rgba(255,255,255,0.05)',
             borderRadius: '12px',
-            padding: '20px',
-            borderLeft: `4px solid ${stat.color}`,
-            backdropFilter: 'blur(10px)'
+            padding: '16px',
+            borderLeft: `4px solid ${stat.color}`
           }}>
             <div style={{ fontSize: '24px', marginBottom: '8px' }}>{stat.icon}</div>
-            <div style={{ fontSize: '12px', color: '#888', marginBottom: '4px' }}>{stat.label}</div>
-            <div style={{ fontSize: '28px', fontWeight: 'bold', color: stat.color }}>{stat.value}</div>
+            <div style={{ fontSize: '11px', color: '#888', marginBottom: '4px' }}>{stat.label}</div>
+            <div style={{ fontSize: '24px', fontWeight: 'bold', color: stat.color }}>{stat.value}</div>
           </div>
         ))}
       </div>
 
-      {/* Wallet Info */}
+      {/* Wallet */}
       <div style={{
         background: 'rgba(247, 147, 26, 0.1)',
         border: '1px solid rgba(247, 147, 26, 0.3)',
@@ -221,7 +202,7 @@ export default function MiningDashboard() {
         <span style={{ fontSize: '24px' }}>💰</span>
         <div>
           <div style={{ fontSize: '12px', color: '#888' }}>Mining Wallet</div>
-          <div style={{ fontFamily: 'monospace', color: '#f7931a', wordBreak: 'break-all' }}>
+          <div style={{ fontFamily: 'monospace', color: '#f7931a', fontSize: '14px' }}>
             {data?.wallet}
           </div>
         </div>
@@ -231,18 +212,17 @@ export default function MiningDashboard() {
         </div>
       </div>
 
-      {/* Main Content Grid */}
+      {/* Main Grid */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(400px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(350px, 1fr))',
         gap: '20px'
       }}>
-        {/* Miners Table */}
+        {/* Miners */}
         <div style={{
           background: 'rgba(255,255,255,0.05)',
           borderRadius: '16px',
-          padding: '20px',
-          backdropFilter: 'blur(10px)'
+          padding: '20px'
         }}>
           <h2 style={{ margin: '0 0 16px', color: '#f7931a', fontSize: '18px' }}>
             👷 Active Miners
@@ -251,34 +231,31 @@ export default function MiningDashboard() {
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
-                  <th style={{ padding: '12px 8px', textAlign: 'left', color: '#888' }}>Worker</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'center', color: '#888' }}>Status</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'right', color: '#888' }}>Hashrate</th>
-                  <th style={{ padding: '12px 8px', textAlign: 'right', color: '#888' }}>Shares</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'left', color: '#888' }}>Worker</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: '#888' }}>Status</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'right', color: '#888' }}>Hashrate</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'right', color: '#888' }}>Shares</th>
                 </tr>
               </thead>
               <tbody>
                 {data?.miners?.map((miner) => (
                   <tr key={miner.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '12px 8px', color: '#fff' }}>
-                      <span style={{ marginRight: '8px' }}>⛏️</span>
-                      {miner.name}
-                    </td>
-                    <td style={{ padding: '12px 8px', textAlign: 'center' }}>
+                    <td style={{ padding: '10px 8px', color: '#fff' }}>⛏️ {miner.name}</td>
+                    <td style={{ padding: '10px 8px', textAlign: 'center' }}>
                       <span style={{
                         background: miner.status === 'active' ? '#22c55e' : '#ef4444',
-                        padding: '4px 12px',
-                        borderRadius: '12px',
-                        fontSize: '12px',
+                        padding: '4px 10px',
+                        borderRadius: '10px',
+                        fontSize: '11px',
                         color: '#fff'
                       }}>
                         {miner.status}
                       </span>
                     </td>
-                    <td style={{ padding: '12px 8px', textAlign: 'right', color: '#06b6d4' }}>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', color: '#06b6d4' }}>
                       {miner.hashrate.toFixed(1)} GH/s
                     </td>
-                    <td style={{ padding: '12px 8px', textAlign: 'right', color: '#f7931a' }}>
+                    <td style={{ padding: '10px 8px', textAlign: 'right', color: '#f7931a' }}>
                       {miner.shares.toLocaleString()}
                     </td>
                   </tr>
@@ -292,41 +269,31 @@ export default function MiningDashboard() {
         <div style={{
           background: 'rgba(255,255,255,0.05)',
           borderRadius: '16px',
-          padding: '20px',
-          backdropFilter: 'blur(10px)'
+          padding: '20px'
         }}>
           <h2 style={{ margin: '0 0 16px', color: '#22c55e', fontSize: '18px' }}>
             ⛏️ Recent Shares
           </h2>
-          <div style={{ maxHeight: '300px', overflowY: 'auto' }}>
+          <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
             {data?.recentShares?.length === 0 ? (
-              <div style={{ color: '#666', textAlign: 'center', padding: '40px' }}>
+              <div style={{ color: '#666', textAlign: 'center', padding: '30px' }}>
                 Waiting for shares...
               </div>
             ) : (
-              data?.recentShares?.map((share, i) => (
+              data?.recentShares?.slice(0, 15).map((share, i) => (
                 <div key={share.id || i} style={{
                   display: 'flex',
                   justifyContent: 'space-between',
-                  alignItems: 'center',
-                  padding: '10px 12px',
+                  padding: '8px 10px',
                   background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  borderRadius: '8px',
-                  marginBottom: '4px',
-                  fontSize: '13px'
+                  borderRadius: '6px',
+                  marginBottom: '3px',
+                  fontSize: '12px'
                 }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                    <span style={{ color: share.isValid ? '#22c55e' : '#ef4444' }}>
-                      {share.isValid ? '✓' : '✗'}
-                    </span>
-                    <span style={{ color: '#fff' }}>{share.worker}</span>
-                  </div>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                    <span style={{ color: '#888' }}>Diff: {share.difficulty}</span>
-                    <span style={{ color: '#666', fontSize: '12px' }}>
-                      {formatTime(share.timestamp)}
-                    </span>
-                  </div>
+                  <span style={{ color: share.isValid ? '#22c55e' : '#ef4444' }}>
+                    {share.isValid ? '✓' : '✗'} {share.worker}
+                  </span>
+                  <span style={{ color: '#666' }}>{formatTime(share.timestamp)}</span>
                 </div>
               ))
             )}
@@ -337,13 +304,12 @@ export default function MiningDashboard() {
         <div style={{
           background: 'rgba(255,255,255,0.05)',
           borderRadius: '16px',
-          padding: '20px',
-          backdropFilter: 'blur(10px)'
+          padding: '20px'
         }}>
           <h2 style={{ margin: '0 0 16px', color: '#06b6d4', fontSize: '18px' }}>
-            📈 Hashrate History
+            📈 Hashrate (Last 60s)
           </h2>
-          <div style={{ height: '150px', display: 'flex', alignItems: 'flex-end', gap: '2px' }}>
+          <div style={{ height: '120px', display: 'flex', alignItems: 'flex-end', gap: '2px' }}>
             {hashHistory.map((hr, i) => (
               <div
                 key={i}
@@ -363,43 +329,35 @@ export default function MiningDashboard() {
           </div>
         </div>
 
-        {/* Blocks Found */}
+        {/* Blocks */}
         <div style={{
           background: 'rgba(255,255,255,0.05)',
           borderRadius: '16px',
-          padding: '20px',
-          backdropFilter: 'blur(10px)'
+          padding: '20px'
         }}>
           <h2 style={{ margin: '0 0 16px', color: '#8b5cf6', fontSize: '18px' }}>
             🎉 Blocks Found
           </h2>
           {data?.blocks?.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '40px', color: '#666' }}>
-              <div style={{ fontSize: '48px', marginBottom: '12px' }}>🎯</div>
-              <div>No blocks found yet...</div>
-              <div style={{ fontSize: '12px', marginTop: '8px' }}>Keep mining!</div>
+            <div style={{ textAlign: 'center', padding: '30px', color: '#666' }}>
+              <div style={{ fontSize: '40px', marginBottom: '10px' }}>🎯</div>
+              <div>Mining in progress...</div>
+              <div style={{ fontSize: '11px', marginTop: '6px' }}>Keep mining!</div>
             </div>
           ) : (
-            data?.blocks?.map((block) => (
+            data?.blocks?.slice(0, 5).map((block) => (
               <div key={block.height} style={{
                 background: 'rgba(139, 92, 246, 0.1)',
                 border: '1px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '12px',
-                padding: '16px',
-                marginBottom: '12px'
+                borderRadius: '10px',
+                padding: '12px',
+                marginBottom: '10px'
               }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '8px' }}>
-                  <span style={{ color: '#8b5cf6', fontWeight: 'bold' }}>
-                    Block #{block.height}
-                  </span>
-                  <span style={{ color: '#22c55e' }}>
-                    +{block.reward} BTC
-                  </span>
+                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
+                  <span style={{ color: '#8b5cf6', fontWeight: 'bold' }}>Block #{block.height}</span>
+                  <span style={{ color: '#22c55e' }}>+{block.reward} BTC</span>
                 </div>
-                <div style={{ fontSize: '12px', color: '#888', wordBreak: 'break-all' }}>
-                  Hash: {block.hash}
-                </div>
-                <div style={{ fontSize: '12px', color: '#666', marginTop: '4px' }}>
+                <div style={{ fontSize: '11px', color: '#666' }}>
                   Found by: {block.miner} • {formatTime(block.timestamp)}
                 </div>
               </div>
@@ -411,17 +369,15 @@ export default function MiningDashboard() {
       {/* Footer */}
       <div style={{
         textAlign: 'center',
-        marginTop: '40px',
+        marginTop: '30px',
         paddingBottom: '20px',
         color: '#666',
         fontSize: '12px'
       }}>
         <div style={{ marginBottom: '8px' }}>
-          <span style={{ color: '#f7931a' }}>⚡</span> Bitcoin Mining Pool v2.0
+          <span style={{ color: '#f7931a' }}>⚡</span> Bitcoin Mining Pool v2.0 - 24/7 Active
         </div>
-        <div>
-          Stratum: stratum+tcp://{window.location.hostname || 'localhost'}:{data?.port}
-        </div>
+        <div>Wallet: {data?.wallet}</div>
       </div>
     </div>
   )
