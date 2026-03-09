@@ -21,6 +21,18 @@ interface PoolConfig {
   algorithm?: string
 }
 
+interface LivePool {
+  name: string
+  url: string
+  worker: string
+  status: string
+  difficulty: number
+  jobsReceived: number
+  lastJob: any
+  lastUpdate: string | null
+  error: string | null
+}
+
 interface MiningData {
   wallet: string
   port: number
@@ -38,13 +50,14 @@ interface MiningData {
   terminalLogs: string[]
   poolConfigs?: PoolConfig[]
   pools?: {
-    braiins: any
-    binance: any
+    braiins: LivePool
+    binance: LivePool
   }
 }
 
 export default function MiningDashboard() {
   const [data, setData] = useState<MiningData | null>(null)
+  const [liveData, setLiveData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [hashHistory, setHashHistory] = useState<number[]>([])
   const terminalRef = useRef<HTMLDivElement>(null)
@@ -65,11 +78,28 @@ export default function MiningDashboard() {
     }
   }, [])
 
+  const fetchLiveData = useCallback(async () => {
+    try {
+      const res = await fetch('/api/live-mining')
+      const json = await res.json()
+      if (json.success) {
+        setLiveData(json)
+      }
+    } catch (e) {
+      console.error('Live fetch error:', e)
+    }
+  }, [])
+
   useEffect(() => {
     fetchData()
+    fetchLiveData()
     const interval = setInterval(fetchData, 1000)
-    return () => clearInterval(interval)
-  }, [fetchData])
+    const liveInterval = setInterval(fetchLiveData, 3000)
+    return () => {
+      clearInterval(interval)
+      clearInterval(liveInterval)
+    }
+  }, [fetchData, fetchLiveData])
 
   useEffect(() => {
     if (autoScroll && terminalRef.current) {
@@ -204,9 +234,22 @@ export default function MiningDashboard() {
           borderRadius: '12px',
           padding: '16px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <span style={{ fontSize: '20px' }}>🔶</span>
-            <h3 style={{ margin: 0, color: '#f7931a', fontSize: '16px' }}>Braiins Pool</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>🔶</span>
+              <h3 style={{ margin: 0, color: '#f7931a', fontSize: '16px' }}>Braiins Pool</h3>
+            </div>
+            <div style={{
+              background: liveData?.pools?.braiins?.status === 'MINING' ? '#22c55e' : 
+                         liveData?.pools?.braiins?.status === 'CONNECTING' ? '#f0b72f' : '#6b7280',
+              padding: '4px 10px',
+              borderRadius: '12px',
+              fontSize: '11px',
+              color: '#fff',
+              fontWeight: 'bold'
+            }}>
+              {liveData?.pools?.braiins?.status || 'CONNECTING...'}
+            </div>
           </div>
           <div style={{ fontSize: '12px', color: '#888' }}>
             <div style={{ marginBottom: '6px' }}>
@@ -215,14 +258,24 @@ export default function MiningDashboard() {
               <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://stratum.braiins.com:3333</code>
             </div>
             <div style={{ marginBottom: '6px' }}>
-              <span style={{ color: '#666' }}>Stratum V2:</span>
-              <br />
-              <code style={{ color: '#a855f7', fontSize: '11px' }}>stratum2+tcp://stratum.braiins.com:3333/...</code>
-            </div>
-            <div>
               <span style={{ color: '#666' }}>Worker:</span>{' '}
               <span style={{ color: '#f7931a' }}>yass3r.workerName</span>
             </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Difficulty:</span>{' '}
+              <span style={{ color: '#06b6d4' }}>{liveData?.pools?.braiins?.difficulty?.toLocaleString() || 0}</span>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Jobs Received:</span>{' '}
+              <span style={{ color: '#22c55e' }}>{liveData?.pools?.braiins?.jobsReceived || 0}</span>
+            </div>
+            {liveData?.pools?.braiins?.lastJob && (
+              <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                <div style={{ color: '#22c55e', fontSize: '11px' }}>
+                  📦 Latest Job: #{liveData.pools.braiins.lastJob.jobId}
+                </div>
+              </div>
+            )}
           </div>
         </div>
 
@@ -233,9 +286,22 @@ export default function MiningDashboard() {
           borderRadius: '12px',
           padding: '16px'
         }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
-            <span style={{ fontSize: '20px' }}>🟡</span>
-            <h3 style={{ margin: 0, color: '#f0b90b', fontSize: '16px' }}>Binance Pool</h3>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '12px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ fontSize: '20px' }}>🟡</span>
+              <h3 style={{ margin: 0, color: '#f0b90b', fontSize: '16px' }}>Binance Pool</h3>
+            </div>
+            <div style={{
+              background: liveData?.pools?.binance?.status === 'MINING' ? '#22c55e' : 
+                         liveData?.pools?.binance?.status === 'CONNECTING' ? '#f0b72f' : '#6b7280',
+              padding: '4px 10px',
+              borderRadius: '12px',
+              fontSize: '11px',
+              color: '#fff',
+              fontWeight: 'bold'
+            }}>
+              {liveData?.pools?.binance?.status || 'CONNECTING...'}
+            </div>
           </div>
           <div style={{ fontSize: '12px', color: '#888' }}>
             <div style={{ marginBottom: '6px' }}>
@@ -244,19 +310,24 @@ export default function MiningDashboard() {
               <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://sha256.poolbinance.com:443</code>
             </div>
             <div style={{ marginBottom: '6px' }}>
-              <span style={{ color: '#666' }}>Pool 2:</span>
-              <br />
-              <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://btc.poolbinance.com:1800</code>
-            </div>
-            <div style={{ marginBottom: '6px' }}>
-              <span style={{ color: '#666' }}>Pool 3:</span>
-              <br />
-              <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://bs.poolbinance.com:3333</code>
-            </div>
-            <div>
               <span style={{ color: '#666' }}>Worker:</span>{' '}
               <span style={{ color: '#f0b90b' }}>yass3r.001</span>
             </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Difficulty:</span>{' '}
+              <span style={{ color: '#06b6d4' }}>{liveData?.pools?.binance?.difficulty?.toLocaleString() || 0}</span>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Jobs Received:</span>{' '}
+              <span style={{ color: '#22c55e' }}>{liveData?.pools?.binance?.jobsReceived || 0}</span>
+            </div>
+            {liveData?.pools?.binance?.lastJob && (
+              <div style={{ marginTop: '8px', padding: '8px', background: 'rgba(0,0,0,0.3)', borderRadius: '6px' }}>
+                <div style={{ color: '#22c55e', fontSize: '11px' }}>
+                  📦 Latest Job: #{liveData.pools.binance.lastJob.jobId}
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
