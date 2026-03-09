@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 
 interface Miner {
   id: number
@@ -9,6 +9,16 @@ interface Miner {
   shares: number
   hashrate: number
   lastShare: string | null
+  pool?: string
+}
+
+interface PoolConfig {
+  name: string
+  url: string
+  worker: string
+  password: string
+  status: string
+  algorithm?: string
 }
 
 interface MiningData {
@@ -21,15 +31,24 @@ interface MiningData {
   totalBlocks: number
   hashrate: number
   activeMiners: number
+  totalWorkers: number
   miners: Miner[]
   recentShares: any[]
   blocks: any[]
+  terminalLogs: string[]
+  poolConfigs?: PoolConfig[]
+  pools?: {
+    braiins: any
+    binance: any
+  }
 }
 
 export default function MiningDashboard() {
   const [data, setData] = useState<MiningData | null>(null)
   const [loading, setLoading] = useState(true)
   const [hashHistory, setHashHistory] = useState<number[]>([])
+  const terminalRef = useRef<HTMLDivElement>(null)
+  const [autoScroll, setAutoScroll] = useState(true)
 
   const fetchData = useCallback(async () => {
     try {
@@ -52,6 +71,23 @@ export default function MiningDashboard() {
     return () => clearInterval(interval)
   }, [fetchData])
 
+  useEffect(() => {
+    if (autoScroll && terminalRef.current) {
+      terminalRef.current.scrollTop = terminalRef.current.scrollHeight
+    }
+  }, [data?.terminalLogs, autoScroll])
+
+  const getLogColor = (log: string) => {
+    if (log.includes('[BLOCK]')) return '#fbbf24'
+    if (log.includes('[SHARE]')) return '#22c55e'
+    if (log.includes('[WARN]')) return '#f97316'
+    if (log.includes('[INFO]')) return '#06b6d4'
+    if (log.includes('[STRATUM]')) return '#a855f7'
+    if (log.includes('BRAIINS')) return '#f7931a'
+    if (log.includes('BINANCE')) return '#f0b90b'
+    return '#22c55e'
+  }
+
   const formatUptime = (seconds: number) => {
     const h = Math.floor(seconds / 3600)
     const m = Math.floor((seconds % 3600) / 60)
@@ -63,22 +99,10 @@ export default function MiningDashboard() {
     return new Date(iso).toLocaleTimeString()
   }
 
-  const toggleMining = async (action: 'start' | 'stop') => {
-    await fetch('/api/mining', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action })
-    })
-    fetchData()
-  }
-
-  const addMiner = async () => {
-    await fetch('/api/mining', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'add_miner' })
-    })
-    fetchData()
+  const getPoolBadgeColor = (pool?: string) => {
+    if (pool === 'Braiins') return { bg: '#f7931a', color: '#000' }
+    if (pool === 'Binance') return { bg: '#f0b90b', color: '#000' }
+    return { bg: '#6b7280', color: '#fff' }
   }
 
   if (loading) {
@@ -93,7 +117,7 @@ export default function MiningDashboard() {
       }}>
         <div style={{ textAlign: 'center', color: '#f7931a' }}>
           <div style={{ fontSize: '48px', marginBottom: '20px' }}>⛏️</div>
-          <div style={{ fontSize: '24px' }}>Loading Mining Pool...</div>
+          <div style={{ fontSize: '24px' }}>Loading Mining Pools...</div>
         </div>
       </div>
     )
@@ -109,7 +133,7 @@ export default function MiningDashboard() {
     }}>
       {/* Header */}
       <div style={{
-        background: 'linear-gradient(90deg, #f7931a 0%, #ffab40 100%)',
+        background: 'linear-gradient(90deg, #f7931a 0%, #f0b90b 50%, #f7931a 100%)',
         borderRadius: '16px',
         padding: '24px',
         marginBottom: '20px',
@@ -121,40 +145,19 @@ export default function MiningDashboard() {
               ⛏️ Bitcoin Mining Pool
             </h1>
             <p style={{ margin: '8px 0 0', color: '#333', fontSize: '14px' }}>
-              Real-time Mining Dashboard - 24/7 Active
+              Multi-Pool Dashboard: Braiins + Binance | 24/7 Active
             </p>
           </div>
           <div style={{ display: 'flex', gap: '12px' }}>
-            <button
-              onClick={() => toggleMining(data?.isRunning ? 'stop' : 'start')}
-              style={{
-                padding: '12px 24px',
-                borderRadius: '8px',
-                border: 'none',
-                background: data?.isRunning ? '#ef4444' : '#22c55e',
-                color: '#fff',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              {data?.isRunning ? '⏹️ Stop' : '▶️ Start'}
-            </button>
-            <button
-              onClick={addMiner}
-              style={{
-                padding: '12px 24px',
-                borderRadius: '8px',
-                border: 'none',
-                background: '#3b82f6',
-                color: '#fff',
-                fontWeight: 'bold',
-                cursor: 'pointer',
-                fontSize: '14px'
-              }}
-            >
-              ➕ Add Miner
-            </button>
+            <div style={{
+              background: '#000',
+              padding: '8px 16px',
+              borderRadius: '8px',
+              fontSize: '12px',
+              color: '#f7931a'
+            }}>
+              🔶 Braiins | 🟡 Binance
+            </div>
           </div>
         </div>
       </div>
@@ -162,17 +165,17 @@ export default function MiningDashboard() {
       {/* Stats Cards */}
       <div style={{
         display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
         gap: '16px',
         marginBottom: '20px'
       }}>
         {[
           { label: 'Active Miners', value: data?.activeMiners || 0, icon: '👷', color: '#22c55e' },
+          { label: 'Total Workers', value: data?.totalWorkers || 0, icon: '👥', color: '#f0b90b' },
           { label: 'Total Shares', value: data?.totalShares?.toLocaleString() || 0, icon: '⛏️', color: '#f7931a' },
           { label: 'Blocks Found', value: data?.totalBlocks || 0, icon: '🎉', color: '#8b5cf6' },
           { label: 'Hashrate', value: `${(data?.hashrate || 0).toFixed(1)} GH/s`, icon: '💨', color: '#06b6d4' },
           { label: 'Uptime', value: formatUptime(data?.uptime || 0), icon: '⏱️', color: '#ec4899' },
-          { label: 'Difficulty', value: data?.difficulty || 0, icon: '📊', color: '#f43f5e' },
         ].map((stat, i) => (
           <div key={i} style={{
             background: 'rgba(255,255,255,0.05)',
@@ -185,6 +188,77 @@ export default function MiningDashboard() {
             <div style={{ fontSize: '24px', fontWeight: 'bold', color: stat.color }}>{stat.value}</div>
           </div>
         ))}
+      </div>
+
+      {/* Pool Configuration Cards */}
+      <div style={{
+        display: 'grid',
+        gridTemplateColumns: 'repeat(auto-fit, minmax(300px, 1fr))',
+        gap: '16px',
+        marginBottom: '20px'
+      }}>
+        {/* Braiins Pool Card */}
+        <div style={{
+          background: 'rgba(247, 147, 26, 0.1)',
+          border: '1px solid rgba(247, 147, 26, 0.3)',
+          borderRadius: '12px',
+          padding: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '20px' }}>🔶</span>
+            <h3 style={{ margin: 0, color: '#f7931a', fontSize: '16px' }}>Braiins Pool</h3>
+          </div>
+          <div style={{ fontSize: '12px', color: '#888' }}>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Primary URL:</span>
+              <br />
+              <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://stratum.braiins.com:3333</code>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Stratum V2:</span>
+              <br />
+              <code style={{ color: '#a855f7', fontSize: '11px' }}>stratum2+tcp://stratum.braiins.com:3333/...</code>
+            </div>
+            <div>
+              <span style={{ color: '#666' }}>Worker:</span>{' '}
+              <span style={{ color: '#f7931a' }}>yass3r.workerName</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Binance Pool Card */}
+        <div style={{
+          background: 'rgba(240, 185, 11, 0.1)',
+          border: '1px solid rgba(240, 185, 11, 0.3)',
+          borderRadius: '12px',
+          padding: '16px'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', marginBottom: '12px' }}>
+            <span style={{ fontSize: '20px' }}>🟡</span>
+            <h3 style={{ margin: 0, color: '#f0b90b', fontSize: '16px' }}>Binance Pool</h3>
+          </div>
+          <div style={{ fontSize: '12px', color: '#888' }}>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Pool 1:</span>
+              <br />
+              <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://sha256.poolbinance.com:443</code>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Pool 2:</span>
+              <br />
+              <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://btc.poolbinance.com:1800</code>
+            </div>
+            <div style={{ marginBottom: '6px' }}>
+              <span style={{ color: '#666' }}>Pool 3:</span>
+              <br />
+              <code style={{ color: '#22c55e', fontSize: '11px' }}>stratum+tcp://bs.poolbinance.com:3333</code>
+            </div>
+            <div>
+              <span style={{ color: '#666' }}>Worker:</span>{' '}
+              <span style={{ color: '#f0b90b' }}>yass3r.001</span>
+            </div>
+          </div>
+        </div>
       </div>
 
       {/* Wallet */}
@@ -206,11 +280,148 @@ export default function MiningDashboard() {
             {data?.wallet}
           </div>
         </div>
-        <div style={{ marginLeft: 'auto', textAlign: 'right' }}>
-          <div style={{ fontSize: '12px', color: '#888' }}>Stratum Port</div>
-          <div style={{ color: '#22c55e', fontWeight: 'bold' }}>{data?.port}</div>
+      </div>
+
+      {/* Terminal Window */}
+      <div style={{
+        background: '#0d1117',
+        borderRadius: '12px',
+        marginBottom: '20px',
+        overflow: 'hidden',
+        border: '1px solid #30363d',
+        boxShadow: '0 8px 32px rgba(0, 0, 0, 0.4)'
+      }}>
+        {/* Terminal Header */}
+        <div style={{
+          background: 'linear-gradient(180deg, #21262d 0%, #161b22 100%)',
+          padding: '12px 16px',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          borderBottom: '1px solid #30363d'
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <div style={{ display: 'flex', gap: '8px' }}>
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f85149' }} />
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#f0b72f' }} />
+              <div style={{ width: '12px', height: '12px', borderRadius: '50%', background: '#3fb950' }} />
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+              <span style={{ color: '#8b949e', fontSize: '13px' }}>⌘</span>
+              <span style={{ color: '#c9d1d9', fontSize: '13px', fontWeight: 500 }}>Mining Terminal - Multi-Pool</span>
+            </div>
+          </div>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px', cursor: 'pointer' }}>
+              <input
+                type="checkbox"
+                checked={autoScroll}
+                onChange={(e) => setAutoScroll(e.target.checked)}
+                style={{ accentColor: '#22c55e' }}
+              />
+              <span style={{ color: '#8b949e', fontSize: '12px' }}>Auto-scroll</span>
+            </label>
+            <div style={{
+              background: data?.isRunning ? '#238636' : '#6e7681',
+              padding: '4px 10px',
+              borderRadius: '12px',
+              fontSize: '11px',
+              color: '#fff',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '5px'
+            }}>
+              <span style={{
+                width: '6px',
+                height: '6px',
+                borderRadius: '50%',
+                background: data?.isRunning ? '#3fb950' : '#8b949e',
+                animation: data?.isRunning ? 'pulse 1s infinite' : 'none'
+              }} />
+              {data?.isRunning ? 'Mining' : 'Stopped'}
+            </div>
+          </div>
+        </div>
+        {/* Terminal Content */}
+        <div
+          ref={terminalRef}
+          onScroll={(e) => {
+            const target = e.target as HTMLDivElement
+            const isAtBottom = target.scrollHeight - target.scrollTop <= target.clientHeight + 50
+            if (!isAtBottom && autoScroll) {
+              setAutoScroll(false)
+            }
+          }}
+          style={{
+            padding: '16px',
+            height: '350px',
+            overflowY: 'auto',
+            fontFamily: '"JetBrains Mono", "Fira Code", "SF Mono", Consolas, monospace',
+            fontSize: '12px',
+            lineHeight: '1.6',
+            background: '#0d1117'
+          }}
+        >
+          {/* Logs */}
+          {data?.terminalLogs?.map((log, i) => (
+            <div
+              key={i}
+              style={{
+                color: getLogColor(log),
+                marginBottom: '2px',
+                whiteSpace: 'nowrap',
+                overflow: 'hidden',
+                textOverflow: 'ellipsis'
+              }}
+            >
+              {log}
+            </div>
+          ))}
+
+          {/* Blinking cursor */}
+          <div style={{
+            display: 'inline-flex',
+            alignItems: 'center',
+            color: '#22c55e',
+            marginTop: '8px'
+          }}>
+            <span>$ </span>
+            <span style={{
+              display: 'inline-block',
+              width: '8px',
+              height: '16px',
+              background: '#22c55e',
+              animation: 'blink 1s infinite',
+              marginLeft: '2px'
+            }} />
+          </div>
         </div>
       </div>
+
+      {/* CSS Animations */}
+      <style jsx global>{`
+        @keyframes blink {
+          0%, 50% { opacity: 1; }
+          51%, 100% { opacity: 0; }
+        }
+        @keyframes pulse {
+          0%, 100% { opacity: 1; }
+          50% { opacity: 0.5; }
+        }
+        div::-webkit-scrollbar {
+          width: 8px;
+        }
+        div::-webkit-scrollbar-track {
+          background: #0d1117;
+        }
+        div::-webkit-scrollbar-thumb {
+          background: #30363d;
+          border-radius: 4px;
+        }
+        div::-webkit-scrollbar-thumb:hover {
+          background: #484f58;
+        }
+      `}</style>
 
       {/* Main Grid */}
       <div style={{
@@ -225,78 +436,55 @@ export default function MiningDashboard() {
           padding: '20px'
         }}>
           <h2 style={{ margin: '0 0 16px', color: '#f7931a', fontSize: '18px' }}>
-            👷 Active Miners
+            👷 Workers (Braiins + Binance)
           </h2>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid rgba(255,255,255,0.1)' }}>
                   <th style={{ padding: '10px 8px', textAlign: 'left', color: '#888' }}>Worker</th>
+                  <th style={{ padding: '10px 8px', textAlign: 'center', color: '#888' }}>Pool</th>
                   <th style={{ padding: '10px 8px', textAlign: 'center', color: '#888' }}>Status</th>
                   <th style={{ padding: '10px 8px', textAlign: 'right', color: '#888' }}>Hashrate</th>
-                  <th style={{ padding: '10px 8px', textAlign: 'right', color: '#888' }}>Shares</th>
                 </tr>
               </thead>
               <tbody>
-                {data?.miners?.map((miner) => (
-                  <tr key={miner.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
-                    <td style={{ padding: '10px 8px', color: '#fff' }}>⛏️ {miner.name}</td>
-                    <td style={{ padding: '10px 8px', textAlign: 'center' }}>
-                      <span style={{
-                        background: miner.status === 'active' ? '#22c55e' : '#ef4444',
-                        padding: '4px 10px',
-                        borderRadius: '10px',
-                        fontSize: '11px',
-                        color: '#fff'
-                      }}>
-                        {miner.status}
-                      </span>
-                    </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', color: '#06b6d4' }}>
-                      {miner.hashrate.toFixed(1)} GH/s
-                    </td>
-                    <td style={{ padding: '10px 8px', textAlign: 'right', color: '#f7931a' }}>
-                      {miner.shares.toLocaleString()}
-                    </td>
-                  </tr>
-                ))}
+                {data?.miners?.map((miner) => {
+                  const badge = getPoolBadgeColor(miner.pool)
+                  return (
+                    <tr key={miner.id} style={{ borderBottom: '1px solid rgba(255,255,255,0.05)' }}>
+                      <td style={{ padding: '10px 8px', color: '#fff' }}>⛏️ {miner.name}</td>
+                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                        <span style={{
+                          background: badge.bg,
+                          color: badge.color,
+                          padding: '2px 8px',
+                          borderRadius: '4px',
+                          fontSize: '11px',
+                          fontWeight: 'bold'
+                        }}>
+                          {miner.pool || 'Pool'}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'center' }}>
+                        <span style={{
+                          background: miner.status === 'active' ? '#22c55e' : miner.status === 'configured' ? '#3b82f6' : '#ef4444',
+                          padding: '4px 10px',
+                          borderRadius: '10px',
+                          fontSize: '11px',
+                          color: '#fff'
+                        }}>
+                          {miner.status}
+                        </span>
+                      </td>
+                      <td style={{ padding: '10px 8px', textAlign: 'right', color: '#06b6d4' }}>
+                        {miner.hashrate.toFixed(1)} GH/s
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
-          </div>
-        </div>
-
-        {/* Recent Shares */}
-        <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '16px',
-          padding: '20px'
-        }}>
-          <h2 style={{ margin: '0 0 16px', color: '#22c55e', fontSize: '18px' }}>
-            ⛏️ Recent Shares
-          </h2>
-          <div style={{ maxHeight: '250px', overflowY: 'auto' }}>
-            {data?.recentShares?.length === 0 ? (
-              <div style={{ color: '#666', textAlign: 'center', padding: '30px' }}>
-                Waiting for shares...
-              </div>
-            ) : (
-              data?.recentShares?.slice(0, 15).map((share, i) => (
-                <div key={share.id || i} style={{
-                  display: 'flex',
-                  justifyContent: 'space-between',
-                  padding: '8px 10px',
-                  background: i % 2 === 0 ? 'rgba(255,255,255,0.02)' : 'transparent',
-                  borderRadius: '6px',
-                  marginBottom: '3px',
-                  fontSize: '12px'
-                }}>
-                  <span style={{ color: share.isValid ? '#22c55e' : '#ef4444' }}>
-                    {share.isValid ? '✓' : '✗'} {share.worker}
-                  </span>
-                  <span style={{ color: '#666' }}>{formatTime(share.timestamp)}</span>
-                </div>
-              ))
-            )}
           </div>
         </div>
 
@@ -309,13 +497,13 @@ export default function MiningDashboard() {
           <h2 style={{ margin: '0 0 16px', color: '#06b6d4', fontSize: '18px' }}>
             📈 Hashrate (Last 60s)
           </h2>
-          <div style={{ height: '120px', display: 'flex', alignItems: 'flex-end', gap: '2px' }}>
+          <div style={{ height: '150px', display: 'flex', alignItems: 'flex-end', gap: '2px' }}>
             {hashHistory.map((hr, i) => (
               <div
                 key={i}
                 style={{
                   flex: 1,
-                  background: `linear-gradient(to top, #06b6d4, #0891b2)`,
+                  background: `linear-gradient(to top, #f7931a, #f0b90b)`,
                   height: `${Math.min((hr / 200) * 100, 100)}%`,
                   borderRadius: '2px 2px 0 0',
                   minHeight: '2px'
@@ -328,42 +516,6 @@ export default function MiningDashboard() {
             <span>Now</span>
           </div>
         </div>
-
-        {/* Blocks */}
-        <div style={{
-          background: 'rgba(255,255,255,0.05)',
-          borderRadius: '16px',
-          padding: '20px'
-        }}>
-          <h2 style={{ margin: '0 0 16px', color: '#8b5cf6', fontSize: '18px' }}>
-            🎉 Blocks Found
-          </h2>
-          {data?.blocks?.length === 0 ? (
-            <div style={{ textAlign: 'center', padding: '30px', color: '#666' }}>
-              <div style={{ fontSize: '40px', marginBottom: '10px' }}>🎯</div>
-              <div>Mining in progress...</div>
-              <div style={{ fontSize: '11px', marginTop: '6px' }}>Keep mining!</div>
-            </div>
-          ) : (
-            data?.blocks?.slice(0, 5).map((block) => (
-              <div key={block.height} style={{
-                background: 'rgba(139, 92, 246, 0.1)',
-                border: '1px solid rgba(139, 92, 246, 0.3)',
-                borderRadius: '10px',
-                padding: '12px',
-                marginBottom: '10px'
-              }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', marginBottom: '6px' }}>
-                  <span style={{ color: '#8b5cf6', fontWeight: 'bold' }}>Block #{block.height}</span>
-                  <span style={{ color: '#22c55e' }}>+{block.reward} BTC</span>
-                </div>
-                <div style={{ fontSize: '11px', color: '#666' }}>
-                  Found by: {block.miner} • {formatTime(block.timestamp)}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
       </div>
 
       {/* Footer */}
@@ -375,9 +527,14 @@ export default function MiningDashboard() {
         fontSize: '12px'
       }}>
         <div style={{ marginBottom: '8px' }}>
-          <span style={{ color: '#f7931a' }}>⚡</span> Bitcoin Mining Pool v2.0 - 24/7 Active
+          <span style={{ color: '#f7931a' }}>⚡</span> Bitcoin Mining Pool v3.0 - Multi-Pool (Braiins + Binance)
         </div>
         <div>Wallet: {data?.wallet}</div>
+        <div style={{ marginTop: '8px', color: '#888' }}>
+          Monitor: <a href="https://pool.braiins.com/dashboard" target="_blank" style={{ color: '#f7931a' }}>Braiins Dashboard</a>
+          {' | '}
+          <a href="https://pool.binance.com/dashboard" target="_blank" style={{ color: '#f0b90b' }}>Binance Dashboard</a>
+        </div>
       </div>
     </div>
   )
