@@ -58,6 +58,7 @@ interface MiningData {
 export default function MiningDashboard() {
   const [data, setData] = useState<MiningData | null>(null)
   const [liveData, setLiveData] = useState<any>(null)
+  const [realMiner, setRealMiner] = useState<any>(null)
   const [loading, setLoading] = useState(true)
   const [hashHistory, setHashHistory] = useState<number[]>([])
   const terminalRef = useRef<HTMLDivElement>(null)
@@ -90,16 +91,39 @@ export default function MiningDashboard() {
     }
   }, [])
 
+  const fetchRealMiner = useCallback(async () => {
+    try {
+      const res = await fetch('/api/real-miner')
+      const json = await res.json()
+      if (json.success) {
+        setRealMiner(json)
+      }
+    } catch (e) {
+      console.error('Real miner fetch error:', e)
+    }
+  }, [])
+
+  const toggleMining = useCallback(async (action: 'start' | 'stop') => {
+    try {
+      await fetch(`/api/real-miner?action=${action}`)
+    } catch (e) {
+      console.error('Toggle mining error:', e)
+    }
+  }, [])
+
   useEffect(() => {
     fetchData()
     fetchLiveData()
+    fetchRealMiner()
     const interval = setInterval(fetchData, 1000)
     const liveInterval = setInterval(fetchLiveData, 3000)
+    const minerInterval = setInterval(fetchRealMiner, 2000)
     return () => {
       clearInterval(interval)
       clearInterval(liveInterval)
+      clearInterval(minerInterval)
     }
-  }, [fetchData, fetchLiveData])
+  }, [fetchData, fetchLiveData, fetchRealMiner])
 
   useEffect(() => {
     if (autoScroll && terminalRef.current) {
@@ -351,6 +375,114 @@ export default function MiningDashboard() {
             {data?.wallet}
           </div>
         </div>
+      </div>
+
+      {/* Real CPU Miner Section */}
+      <div style={{
+        background: 'linear-gradient(135deg, rgba(34, 197, 94, 0.1) 0%, rgba(16, 185, 129, 0.1) 100%)',
+        border: '2px solid rgba(34, 197, 94, 0.5)',
+        borderRadius: '16px',
+        padding: '20px',
+        marginBottom: '20px'
+      }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: '16px', flexWrap: 'wrap', gap: '12px' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: '12px' }}>
+            <span style={{ fontSize: '32px' }}>⛏️</span>
+            <div>
+              <h2 style={{ margin: 0, color: '#22c55e', fontSize: '20px' }}>REAL CPU MINER</h2>
+              <p style={{ margin: '4px 0 0', color: '#888', fontSize: '12px' }}>
+                Live SHA256 Hash Calculation - Connected to Braiins Pool
+              </p>
+            </div>
+          </div>
+          <div style={{ display: 'flex', gap: '12px' }}>
+            <button
+              onClick={() => toggleMining('start')}
+              style={{
+                background: 'linear-gradient(135deg, #22c55e, #10b981)',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                color: '#fff',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '14px',
+                boxShadow: '0 4px 15px rgba(34, 197, 94, 0.4)'
+              }}
+            >
+              ▶ START MINING
+            </button>
+            <button
+              onClick={() => toggleMining('stop')}
+              style={{
+                background: 'linear-gradient(135deg, #ef4444, #dc2626)',
+                border: 'none',
+                padding: '10px 20px',
+                borderRadius: '8px',
+                color: '#fff',
+                fontWeight: 'bold',
+                cursor: 'pointer',
+                fontSize: '14px'
+              }}
+            >
+              ⏹ STOP
+            </button>
+          </div>
+        </div>
+        
+        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px' }}>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#888' }}>Status</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: realMiner?.miner?.status === 'MINING' ? '#22c55e' : '#f0b72f' }}>
+              {realMiner?.miner?.status || 'CONNECTING...'}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#888' }}>Hashrate</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#06b6d4' }}>
+              {realMiner?.miner?.hashrate?.formatted || '0 H/s'}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#888' }}>Shares Accepted</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#22c55e' }}>
+              {realMiner?.miner?.sharesAccepted || 0}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#888' }}>Jobs Received</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#f7931a' }}>
+              {realMiner?.miner?.jobsReceived || 0}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#888' }}>Difficulty</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#8b5cf6' }}>
+              {realMiner?.miner?.difficulty?.toLocaleString() || 0}
+            </div>
+          </div>
+          <div style={{ background: 'rgba(0,0,0,0.3)', borderRadius: '8px', padding: '12px', textAlign: 'center' }}>
+            <div style={{ fontSize: '11px', color: '#888' }}>Uptime</div>
+            <div style={{ fontSize: '16px', fontWeight: 'bold', color: '#ec4899' }}>
+              {realMiner?.miner?.uptimeFormatted || '0h 0m 0s'}
+            </div>
+          </div>
+        </div>
+        
+        {realMiner?.logs && realMiner.logs.length > 0 && (
+          <div style={{ marginTop: '16px', background: '#0d1117', borderRadius: '8px', padding: '12px', maxHeight: '200px', overflowY: 'auto' }}>
+            {realMiner.logs.slice(0, 15).map((log: string, i: number) => (
+              <div key={i} style={{ 
+                color: log.includes('✅') ? '#22c55e' : log.includes('❌') ? '#ef4444' : log.includes('⚠️') ? '#f0b72f' : '#22c55e',
+                fontSize: '11px',
+                fontFamily: 'monospace',
+                marginBottom: '2px'
+              }}>
+                {log}
+              </div>
+            ))}
+          </div>
+        )}
       </div>
 
       {/* Terminal Window */}
