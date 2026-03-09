@@ -104,7 +104,7 @@ export async function GET() {
     `[${getTime()}] └─ Status: Mining`,
     `[${getTime()}] `,
     `[${getTime()}] 📌 BINANCE POOL:`,
-    ...BINANCE_URLS.map((url, i) => `[${getTime()}] ├─ Pool ${i + 1}: ${url}`).join(''),
+    ...BINANCE_URLS.map((url, i) => `[${getTime()}] ├─ Pool ${i + 1}: ${url}`),
     `[${getTime()}] ├─ Worker: ${BINANCE_WORKER}`,
     `[${getTime()}] └─ Status: Mining`,
     `[${getTime()}] `,
