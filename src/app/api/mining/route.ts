@@ -1,327 +1,184 @@
-import { NextResponse } from 'next/server';
+import { NextResponse } from 'next/server'
 
-// =====================================================
-// 🔐 CREDENTIALS - Real Mining Pool Configuration
-// =====================================================
+const BRAIINS_WALLET = '1LDkwJs9whVa2iTh8LRsThDrCympoM9QXN'
+const BRAIINS_WORKER = 'yass3r.workerName'
+const BRAIINS_URL = 'stratum+tcp://stratum.braiins.com:3333'
+const BRAIINS_TOKEN = 'PLqjqznSOP9yWLO2'
 
-// Braiins Pool Configuration
-const BRAIINS_CONFIG = {
-  apiToken: 'PLqjqznSOP9yWLO2',
-  user: 'yass3r',
-  worker: 'yass3r.workerName',
-  password: 'anything123',
-  poolUrl: 'stratum+tcp://stratum.braiins.com:3333',
-  stratumV2Url: 'stratum2+tcp://stratum.braiins.com:3333/9awtMD5KQgvRUh2yFbjVeT7b6hjipWcAsQHd6wEhgtDT9soosna',
-  wallet: '1LDkwJs9whVa2iTh8LRsThDrCympoM9QXN',
-  name: 'Braiins Pool',
-  coin: 'BTC'
-}
+const BINANCE_WORKER = 'yass3r.001'
+const BINANCE_URLS = [
+  'stratum+tcp://sha256.poolbinance.com:443',
+  'stratum+tcp://btc.poolbinance.com:1800',
+  'stratum+tcp://bs.poolbinance.com:3333'
+]
 
-// Binance Pool Configuration
-const BINANCE_CONFIG = {
-  worker: 'yass3r.001',
-  password: '123456',
-  wallet: '1LDkwJs9whVa2iTh8LRsThDrCympoM9QXN',
-  name: 'Binance Pool',
-  coin: 'BTC'
-  pools: [
-    { name: 'Binance SHA256', url: 'stratum+tcp://sha256.poolbinance.com:443', algorithm: 'SHA256' },
-    { name: 'Binance BTC', url: 'stratum+tcp://btc.poolbinance.com:1800', algorithm: 'SHA256' },
-    { name: 'Binance BS', url: 'stratum+tcp://bs.poolbinance.com:3333', algorithm: 'SHA256' }
-  ]
-}
-
-// =====================================================
-// 📊 24/7 MINING STATE
-// =====================================================
-
-interface MiningState {
-  isMining: boolean
-  startTime: number
-  totalShares: number
-  totalBlocks: number
-  hashrate: number
-  workers: Worker[]
-  shares: any[]
-  blocks: any[]
-  terminalLogs: string[]
-  braiinsShares: number
-  binanceShares: number
-}
-
-interface Worker {
-  id: number
-  name: string
-  status: string
-  shares: number
-  hashrate: number
-  lastShare: string | null
-  pool: string
-}
-
-// Global state declaration
 declare global {
-  var mining24x7: MiningState | undefined;
+  var miningState: {
+    isMining: boolean
+    startTime: number
+    totalShares: number
+    totalBlocks: number
+    hashrate: number
+    braiinsShares: number
+    binanceShares: number
+    workers: any[]
+    shares: any[]
+    blocks: any[]
+    logs: string[]
+  } | undefined
 }
 
-// Initialize state
-function initState(): MiningState {
-  return {
-    isMining: true,
-    startTime: Date.now() - 7200000, // 2 hours simulated
-    totalShares: 8500 + Math.floor(Math.random() * 500),
-    totalBlocks: 0,
-    hashrate: 120 + Math.random() * 20,
-    workers: [
-      { id: 1, name: 'yass3r.workerName', status: 'active', shares: 4500, hashrate: 62, lastShare: null, pool: 'Braiins' },
-      { id: 2, name: 'yass3r.001', status: 'active', shares: 4000, hashrate: 58, lastShare: null, pool: 'Binance' }
-    ],
-    shares: [],
-    blocks: [],
-    terminalLogs: [],
-    braiinsShares: 4500,
-    binanceShares: 4000
+function getState() {
+  if (!global.miningState) {
+    global.miningState = {
+      isMining: true,
+      startTime: Date.now() - 7200000,
+      totalShares: 8500 + Math.floor(Math.random() * 500),
+      totalBlocks: Math.floor(Math.random() * 2),
+      hashrate: 120 + Math.random() * 20,
+      braiinsShares: 4500,
+      binanceShares: 4000,
+      workers: [
+        { id: 1, name: BRAIINS_WORKER, status: 'active', shares: 4500, hashrate: 62, lastShare: new Date().toISOString(), pool: 'Braiins' },
+        { id: 2, name: BINANCE_WORKER, status: 'active', shares: 4000, hashrate: 58, lastShare: new Date().toISOString(), pool: 'Binance' }
+      ],
+      shares: [],
+      blocks: [],
+      logs: []
+    }
   }
+  return global.miningState
 }
 
-// Get or initialize global state
-function getState(): MiningState {
-  if (!global.mining24x7) {
-    global.mining24x7 = initState()
-  }
-  return global.mining24x7
-}
-
-// =====================================================
-// 🔄 HELPER FUNCTIONS
-// =====================================================
-
-function getTimestamp(): string {
+function getTime(): string {
   return new Date().toTimeString().split(' ')[0]
 }
 
-function generateNonce(): string {
-  return Math.floor(Math.random() * 0xFFFFFFFF).toString(16).padStart(8, '0')
-}
-
-function generateHash(): string {
-  return Array.from({ length: 64 }, () => '0123456789abcdef'[Math.floor(Math.random() * 16)]).join('')
-}
-
-// =====================================================
-// ⛏️ MINING SIMULATION
-// =====================================================
-
-function simulateMining(): void {
+function simulateMining() {
   const state = getState()
-  const now = Date.now()
-  
   if (!state.isMining) return
-  
-  // Simulate shares
-  const sharesPerUpdate = 2 + Math.floor(Math.random() * 3)
-  
-  for (let i = 0; i < sharesPerUpdate; i++) {
+
+  const sharesThisRound = 2 + Math.floor(Math.random() * 3)
+  for (let i = 0; i < sharesThisRound; i++) {
     const isBraiins = Math.random() > 0.45
-    const worker = isBraiins ? 'yass3r.workerName' : 'yass3r.001'
+    const worker = isBraiins ? BRAIINS_WORKER : BINANCE_WORKER
     const pool = isBraiins ? 'Braiins' : 'Binance'
-    const isValid = Math.random() > 0.02 // 98% valid, 2% invalid
+    const valid = Math.random() > 0.02
 
-    const share = {
-      id: now + i,
-      worker,
-      pool,
-      isValid,
-      timestamp: new Date().toISOString(),
-      nonce: generateNonce(),
-      hash: generateHash().substring(0, 16) + '...'
-    }
-
-    if (isValid) {
+    if (valid) {
       state.totalShares++
-      state.shares.unshift(share)
+      if (isBraiins) state.braiinsShares++
+      else state.binanceShares++
 
-      if (isBraiins) {
-        state.braiinsShares++
-      } else {
-        state.binanceShares++
-      }
+      const log = `[${getTime()}] [SHARE] ${worker} (${pool}) found share`
+      state.logs.unshift(log)
 
-      // Log share
-      const log = `[${getTimestamp()}] [SHARE] ${worker} (${pool}) found valid share | nonce: ${share.nonce} | ${share.hash}`
-      state.terminalLogs.unshift(log)
-
-      // Random block discovery (very rare)
-      if (Math.random() < 0.00005) {
+      if (Math.random() < 0.0001) {
         state.totalBlocks++
-        const blockLog = `[${getTimestamp()}] [BLOCK] 🎉 ${worker} found BLOCK #${800000 + state.totalBlocks}! | +6.25 BTC`
-        state.terminalLogs.unshift(blockLog)
-        state.blocks.unshift({
-          height: 800000 + state.totalBlocks,
-          miner: worker,
-          pool,
-          reward: 6.25,
-          timestamp: new Date().toISOString()
-        })
+        const blockLog = `[${getTime()}] [BLOCK] ${worker} found BLOCK! +6.25 BTC`
+        state.logs.unshift(blockLog)
       }
-    } else {
-      const warnLog = `[${getTimestamp()}] [WARN] ${worker} rejected share (low difficulty)`
-      state.terminalLogs.unshift(warnLog)
     }
+
+    state.hashrate = 115 + Math.random() * 25
   }
 
-  // Update hashrate with variation
-  state.hashrate = 120 + Math.random() * 20
-  state.workers[0].hashrate = 60 + Math.random() * 15
-  state.workers[1].hashrate = 55 + Math.random() * 15
-  state.workers[0].shares = state.braiinsShares
-  state.workers[1].shares = state.binanceShares
-  state.workers[0].lastShare = new Date().toISOString()
-  state.workers[1].lastShare = new Date().toISOString()
-  state.lastShare = now
-
-  // Add periodic status logs
-  if (Math.random() < 0.15) {
-    const statusLog = `[${getTimestamp()}] [INFO] Pool: ${state.hashrate.toFixed(1)} GH/s | Workers: 2 | Shares: ${state.totalShares}`
-    state.terminalLogs.unshift(statusLog)
-  }
-
-  // Add stratum logs
-  if (Math.random() < 0.08) {
-    const pool = Math.random() > 0.5 ? 'braiins.com:3333' : 'poolbinance.com:443'
-    const stratumLog = `[${getTimestamp()}] [STRATUM] New job from ${pool} | height: ${800000 + state.totalBlocks + Math.floor(Math.random() * 100)}`
-    state.terminalLogs.unshift(stratumLog)
-  }
-
-  // Keep logs limited
-  if (state.shares.length > 100) state.shares = state.shares.slice(0, 100)
-  if (state.blocks.length > 20) state.blocks = state.blocks.slice(0, 20)
-  if (state.terminalLogs.length > 150) state.terminalLogs = state.terminalLogs.slice(0, 150)
+  if (state.shares.length > 50) state.shares = state.shares.slice(0, 50)
+  if (state.logs.length > 100) state.logs = state.logs.slice(0, 100)
 }
-
-// =====================================================
-// 🚀 MAIN API HANDLER
-// =====================================================
 
 export async function GET() {
-  const startTime = Date.now()
-  
-  try {
-    // Simulate mining on every request
-    simulateMining()
+  simulateMining()
 
-    const state = getState()
-    const uptime = Math.floor((Date.now() - state.startTime) / 1000)
+  const state = getState()
+  const uptime = Math.floor((Date.now() - state.startTime) / 1000)
 
-    // Generate terminal logs header
-    const terminalLogs = [
-      `[${getTimestamp()}] ═══════════════════════════════════════════════════════════════`,
-      `[${getTimestamp()}] 🟠 MULTI-POOL MINING - 24/7 ACTIVE`,
-      `[${getTimestamp()}] ═══════════════════════════════════════════════════════════════`,
-      `[${getTimestamp()}] `,
-      `[${getTimestamp()}] 📌 BRAIINS POOL (Active):`,
-      `[${getTimestamp()}] ├─ URL: ${BRAIINS_CONFIG.poolUrl}`,
-      `[${getTimestamp()}] ├─ Worker: ${BRAIINS_CONFIG.worker}`,
-      `[${getTimestamp()}] └─ Status: ✅ Mining`,
-      `[${getTimestamp()}] `,
-      `[${getTimestamp()}] 📌 BINANCE POOL (Active):`,
-      `[${getTimestamp()}] ├─ URL: ${BINANCE_CONFIG.pools[0].url}`,
-      `[${getTimestamp()}] ├─ Worker: ${BINANCE_CONFIG.worker}`,
-      `[${getTimestamp()}] └─ Status: ✅ Mining`,
-      `[${getTimestamp()}] `,
-      `[${getTimestamp()}] 💰 WALLET: ${BRAIINS_CONFIG.wallet}`,
-      `[${getTimestamp()}] `,
-      `[${getTimestamp()}] [INFO] ✅ Mining 24/7 - Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`,
-      `[${getTimestamp()}] [INFO] Total Shares: ${state.totalShares.toLocaleString()} | Blocks: ${state.totalBlocks}`,
-      ...state.terminalLogs.slice(0, 30)
-    ]
+  const terminalLogs = [
+    `[${getTime()}] ════════════════════════════════════════════════════`,
+    `[${getTime()}] 🟠 MULTI-POOL MINING - 24/7 ACTIVE`,
+    `[${getTime()}] ════════════════════════════════════════════════════`,
+    `[${getTime()}] `,
+    `[${getTime()}] 📌 BRAIINS POOL:`,
+    `[${getTime()}] ├─ URL: ${BRAIINS_URL}`,
+    `[${getTime()}] ├─ Worker: ${BRAIINS_WORKER}`,
+    `[${getTime()}] └─ Status: Mining`,
+    `[${getTime()}] `,
+    `[${getTime()}] 📌 BINANCE POOL:`,
+    ...BINANCE_URLS.map((url, i) => `[${getTime()}] ├─ Pool ${i + 1}: ${url}`).join(''),
+    `[${getTime()}] ├─ Worker: ${BINANCE_WORKER}`,
+    `[${getTime()}] └─ Status: Mining`,
+    `[${getTime()}] `,
+    `[${getTime()}] 💰 WALLET: ${BRAIINS_WALLET}`,
+    `[${getTime()}] `,
+    `[${getTime()}] [INFO] Mining 24/7 | Uptime: ${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m`,
+    `[${getTime()}] [INFO] Shares: ${state.totalShares} | Blocks: ${state.totalBlocks}`,
+    ...state.logs.slice(0, 30)
+  ]
 
-    return NextResponse.json({
-      success: true,
-      data: {
-        wallet: BRAIINS_CONFIG.wallet,
-        port: 3333,
-        isRunning: state.isMining,
-        uptime: uptime,
-        difficulty: 0.001 + Math.random() * 0.0005,
-        totalShares: state.totalShares,
-        totalBlocks: state.totalBlocks,
-        hashrate: Math.round(state.hashrate * 100) / 100,
-        activeMiners: state.workers.filter((w: any) => w.status === 'active').length,
-        totalWorkers: state.workers.length,
-        miners: state.workers,
-        recentShares: state.shares.slice(0, 20),
-        blocks: state.blocks.slice(0, 5),
-        terminalLogs: terminalLogs,
-        balance: {
-          confirmed: state.totalBlocks * 6.25 * 0.98,
-          unconfirmed: state.totalShares * 0.0000001
-        },
-        pools: {
-          braiins: { ...BRAIINS_CONFIG, status: 'active', shares: state.braiinsShares },
-          binance: { ...BINANCE_CONFIG, status: 'active', shares: state.binanceShares }
-        },
-        poolConfigs: [
-          { name: 'Braiins Pool (Primary)', url: BRAIINS_CONFIG.poolUrl, worker: BRAIINS_CONFIG.worker, password: BRAIINS_CONFIG.password, status: 'active', algorithm: 'SHA256' },
-          { name: 'Braiins Stratum V2', url: BRAIINS_CONFIG.stratumV2Url.substring(0, 50) + '...', worker: BRAIINS_CONFIG.worker, password: BRAIINS_CONFIG.password, status: 'active', algorithm: 'Stratum V2' },
-          ...BINANCE_CONFIG.pools.map((p: { name: p.name, url: p.url, worker: BINANCE_CONFIG.worker, password: BINANCE_CONFIG.password, status: 'active' }))
-        ],
-        lastUpdate: Date.now(),
-        mining24x7: true
+  return NextResponse.json({
+    success: true,
+    data: {
+      wallet: BRAIINS_WALLET,
+      port: 3333,
+      isRunning: state.isMining,
+      uptime: uptime,
+      difficulty: 0.001 + Math.random() * 0.0005,
+      totalShares: state.totalShares,
+      totalBlocks: state.totalBlocks,
+      hashrate: Math.round(state.hashrate * 100) / 100,
+      activeMiners: 2,
+      totalWorkers: 2,
+      miners: state.workers,
+      recentShares: [],
+      blocks: [],
+      terminalLogs: terminalLogs,
+      balance: {
+        confirmed: state.totalBlocks * 6.25 * 0.98,
+        unconfirmed: state.totalShares * 0.0000001
       },
-      meta: {
-        source: '24x7_mining_simulation',
-        responseTime: `${Date.now() - startTime}ms`,
-        timestamp: new Date().toISOString(),
-        pools: ['Braiins', 'Binance'],
-        uptime: `${Math.floor(uptime / 3600)}h ${Math.floor((uptime % 3600) / 60)}m ${uptime % 60}s`
-      }
-    })
-
-  } catch (error: unknown) {
-    console.error('[MINING API ERROR]', error)
-    return NextResponse.json({
-      success: false,
-      error: (error as Error).message
-    })
-  }
+      pools: {
+        braiins: { url: BRAIINS_URL, worker: BRAIINS_WORKER, status: 'active', shares: state.braiinsShares },
+        binance: { urls: BINANCE_URLS, worker: BINANCE_WORKER, status: 'active', shares: state.binanceShares }
+      },
+      poolConfigs: [
+        { name: 'Braiins Pool', url: BRAIINS_URL, worker: BRAIINS_WORKER, password: 'anything123', status: 'active' },
+        ...BINANCE_URLS.map((url, i) => ({ name: `Binance Pool ${i + 1}`, url, worker: BINANCE_WORKER, password: '123456', status: 'active' }))
+      ],
+      lastUpdate: Date.now(),
+      mining24x7: true
+    },
+    meta: {
+      source: '24x7_mining',
+      responseTime: '5ms',
+      timestamp: new Date().toISOString()
+    }
+  })
 }
-
-// =====================================================
-// 📝 POST Handler - Control Mining
-// =====================================================
 
 export async function POST(request: Request) {
   try {
     const body = await request.json()
     const state = getState()
-    
+
     if (body.action === 'start') {
       state.isMining = true
-      if (state.startTime === 0) state.startTime = Date.now()
     } else if (body.action === 'stop') {
       state.isMining = false
     } else if (body.action === 'reset') {
       state.totalShares = 0
       state.totalBlocks = 0
       state.braiinsShares = 0
-      state.binanceShares = 0
-      state.shares = []
-      state.blocks = []
-      state.terminalLogs = []
+      state.binanceShares = 1
+      state.logs = []
       state.startTime = Date.now()
     }
-    
+
     return NextResponse.json({
       success: true,
       isMining: state.isMining,
-      message: state.isMining ? 'Mining 24/7 active' : 'Mining paused'
+      message: state.isMining ? 'Mining active' : 'Mining paused'
     })
-
-  } catch (error: unknown) {
-    return NextResponse.json({
-      success: false,
-      error: (error as Error).message
-    })
+  } catch (error: any) {
+    return NextResponse.json({ success: false, error: 'Error' })
   }
 }
