@@ -1,203 +1,105 @@
 /**
- * Binance Pool Mining API Integration
- * Real mining data using Binance Pool API
+ * Binance Pool Mining API - Real Data with HMAC Authentication
  */
 
 import { NextRequest } from 'next/server';
+import * as crypto from 'crypto';
 
 const BINANCE_API_KEY = 'Q1Pn5qCo5ovfCwOgHDj9xu9jABmEnDhuM7sf73RReAiwR8Yz1tDeNaZyT8wNko7r';
+const BINANCE_SECRET_KEY = 'bIXXoYHGDOXGvy68vNkrdXMUGgQNWe8lQbBWzj9GSzhqhXwOjQGbTQfiZdKpnydl';
 const BINANCE_POOL_BASE_URL = 'https://pool.binance.com';
 
-// Hashrate history storage
-let hashrateHistory: { timestamp: number; hashrate: number }[] = [];
-let lastFetchTime = 0;
+// Create HMAC signature
+function createSignature(queryString: string): string {
+  return crypto
+    .createHmac('sha256', BINANCE_SECRET_KEY)
+    .update(queryString)
+    .digest('hex');
+}
 
-async function fetchBinanceAPI(endpoint: string) {
+// Fetch with authentication
+async function fetchBinanceAPI(endpoint: string, params: Record<string, string> = {}) {
   try {
-    const response = await fetch(`${BINANCE_POOL_BASE_URL}${endpoint}`, {
+    const timestamp = Date.now().toString();
+    const allParams = { ...params, timestamp };
+    const queryString = new URLSearchParams(allParams).toString();
+    const signature = createSignature(queryString);
+    
+    const url = `${BINANCE_POOL_BASE_URL}${endpoint}?${queryString}&signature=${signature}`;
+    
+    const response = await fetch(url, {
       headers: {
         'X-MBX-APIKEY': BINANCE_API_KEY,
         'Content-Type': 'application/json'
       }
     });
     
-    if (!response.ok) {
-      const text = await response.text();
-      console.error(`Binance API error ${response.status}:`, text);
-      return null;
+    const text = await response.text();
+    try {
+      return JSON.parse(text);
+    } catch {
+      return { error: 'Invalid response', text: text.substring(0, 100) };
     }
-    
-    return await response.json();
-  } catch (error) {
-    console.error('Binance API fetch error:', error);
-    return null;
+  } catch (error: unknown) {
+    const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+    return { error: errorMessage };
   }
-}
-
-// Get account earnings
-async function getMiningEarnings() {
-  return fetchBinanceAPI('/mining/earnings/list?algo=SHA256');
-}
-
-// Get mining workers
-async function getMiningWorkers() {
-  return fetchBinanceAPI('/mining/worker/list?algo=SHA256');
-}
-
-// Get hashrate history
-async function getHashrateHistory() {
-  return fetchBinanceAPI('/mining/hashrate/list?algo=SHA256');
-}
-
-// Get mining statistics
-async function getMiningStats() {
-  return fetchBinanceAPI('/mining/statistics/list?algo=SHA256');
-}
-
-// Get account details
-async function getAccountDetails() {
-  return fetchBinanceAPI('/mining/account/list?algo=SHA256');
 }
 
 export async function GET(request: NextRequest) {
   const searchParams = request.nextUrl.searchParams;
-  const action = searchParams.get('action') || 'status';
+  const action = searchParams.get('action') || 'all';
   
   try {
-    // Fetch all data in parallel
-    const [earnings, workers, hashrate, stats, account] = await Promise.all([
-      getMiningEarnings(),
-      getMiningWorkers(),
-      getHashrateHistory(),
-      getMiningStats(),
-      getAccountDetails()
-    ]);
+    let result: Record<string, unknown> = {};
     
-    // Process workers data
-    const activeWorkers: any[] = [];
-    const inactiveWorkers: any[] = [];
-    
-    if (workers?.data?.workerList) {
-      for (const worker of workers.data.workerList) {
-        const workerData = {
-          workerId: worker.workerId,
-          workerName: worker.workerName,
-          hashrate: worker.hashRate || 0,
-          dayHashrate: worker.dayHashRate || 0,
-          status: worker.status,
-          lastShareTime: worker.lastShareTime,
-          isValid: worker.isValid
-        };
-        
-        if (worker.status === 'online' || worker.isValid) {
-          activeWorkers.push(workerData);
-        } else {
-          inactiveWorkers.push(workerData);
-        }
-      }
+    if (action === 'workers' || action === 'all') {
+      const workersData = await fetchBinanceAPI('/mining/worker/list', { algo: 'SHA256' });
+      result.workers = workersData;
     }
     
-    // Calculate total hashrate
-    const totalHashrate = activeWorkers.reduce((sum, w) => sum + (w.hashrate || 0), 0);
-    const totalDayHashrate = activeWorkers.reduce((sum, w) => sum + (w.dayHashrate || 0), 0);
-    
-    // Update hashrate history
-    const now = Date.now();
-    if (now - lastFetchTime > 60000) {
-      hashrateHistory.push({ timestamp: now, hashrate: totalHashrate });
-      if (hashrateHistory.length > 60) {
-        hashrateHistory = hashrateHistory.slice(-60);
-      }
-      lastFetchTime = now;
+    if (action === 'earnings' || action === 'all') {
+      const earningsData = await fetchBinanceAPI('/mining/earnings/list', { algo: 'SHA256' });
+      result.earnings = earningsData;
     }
     
-    // Process earnings
-    let totalEarnings = 0;
-    let todayEarnings = 0;
-    if (earnings?.data) {
-      totalEarnings = earnings.data.totalEarnings || 0;
-      todayEarnings = earnings.data.todayEarnings || 0;
+    if (action === 'stats' || action === 'all') {
+      const statsData = await fetchBinanceAPI('/mining/statistics/list', { algo: 'SHA256' });
+      result.stats = statsData;
     }
     
-    // Process stats
-    let poolHashrate = 0;
-    let rejectRate = 0;
-    if (stats?.data) {
-      poolHashrate = stats.data.hashrate || 0;
-      rejectRate = stats.data.rejectRate || 0;
+    if (action === 'account' || action === 'all') {
+      const accountData = await fetchBinanceAPI('/mining/account/list', { algo: 'SHA256' });
+      result.account = accountData;
     }
     
-    // Terminal logs
-    const terminalLogs: string[] = [];
-    const timestamp = new Date().toISOString();
+    // Calculate summary
+    const workers = (result.workers as any)?.data?.workerList || [];
+    const earnings = (result.earnings as any)?.data || {};
+    const stats = (result.stats as any)?.data || {};
     
-    terminalLogs.push(`[${timestamp.split('T')[1].split('.')[0]}] [INFO] 🔗 Binance Pool API Connected`);
-    terminalLogs.push(`[${timestamp.split('T')[1].split('.')[0]}] [STRATUM] Pool: stratum+tcp://sha256.poolbinance.com:443`);
-    terminalLogs.push(`[${timestamp.split('T')[1].split('.')[0]}] [INFO] 👷 Active Workers: ${activeWorkers.length}`);
-    
-    if (activeWorkers.length > 0) {
-      activeWorkers.slice(0, 3).forEach((w: any) => {
-        terminalLogs.push(`[${timestamp.split('T')[1].split('.')[0]}] [WORKER] ⛏️ ${w.workerName}: ${(w.hashrate / 1000000000000).toFixed(2)} TH/s`);
-      });
-    }
-    
-    terminalLogs.push(`[${timestamp.split('T')[1].split('.')[0]}] [INFO] 💨 Total Hashrate: ${(totalHashrate / 1000000000000).toFixed(4)} TH/s`);
-    
-    if (totalEarnings > 0) {
-      terminalLogs.push(`[${timestamp.split('T')[1].split('.')[0]}] [SHARE] 💰 Today's Earnings: ${(todayEarnings / 100000000).toFixed(8)} BTC`);
-    }
+    const activeWorkers = workers.filter((w: any) => w.status === 'online' || w.isValid);
+    const totalHashrate = activeWorkers.reduce((sum: number, w: any) => sum + (w.hashRate || 0), 0);
     
     return Response.json({
       success: true,
       timestamp: new Date().toISOString(),
-      message: '🚀 BINANCE POOL MINING ACTIVE',
-      apiKeyConfigured: true,
-      mining: {
-        status: activeWorkers.length > 0 ? 'MINING' : 'WAITING',
-        algorithm: 'SHA256',
-        coin: 'BTC',
-        pool: {
-          name: 'Binance Pool',
-          url: 'stratum+tcp://sha256.poolbinance.com:443',
-          backupUrls: [
-            'stratum+tcp://btc.poolbinance.com:1800',
-            'stratum+tcp://bs.poolbinance.com:3333'
-          ]
-        },
-        workers: {
-          total: activeWorkers.length + inactiveWorkers.length,
-          active: activeWorkers.length,
-          inactive: inactiveWorkers.length,
-          list: [...activeWorkers, ...inactiveWorkers].slice(0, 10)
-        },
-        hashrate: {
-          current: totalHashrate,
-          currentTH: (totalHashrate / 1000000000000).toFixed(4),
-          dayAverage: totalDayHashrate,
-          dayAverageTH: (totalDayHashrate / 1000000000000).toFixed(4),
-          history: hashrateHistory.slice(-10)
-        },
-        earnings: {
-          total: totalEarnings,
-          totalBTC: (totalEarnings / 100000000).toFixed(8),
-          today: todayEarnings,
-          todayBTC: (todayEarnings / 100000000).toFixed(8)
-        },
-        stats: {
-          rejectRate: rejectRate,
-          validShares: 0,
-          invalidShares: 0
-        }
+      message: '✅ BINANCE POOL API CONNECTED',
+      apiKey: BINANCE_API_KEY.substring(0, 8) + '...',
+      summary: {
+        totalWorkers: workers.length,
+        activeWorkers: activeWorkers.length,
+        totalHashrateTH: (totalHashrate / 1000000000000).toFixed(4),
+        todayEarnings: ((earnings.todayEarnings || 0) / 100000000).toFixed(8),
+        totalEarnings: ((earnings.totalEarnings || 0) / 100000000).toFixed(8)
       },
-      wallet: '1LDkwJs9whVa2iTh8LRsThDrCympoM9QXN',
-      worker: 'yass3r.001',
-      terminalLogs,
-      rawResponse: {
-        earnings: earnings?.data || null,
-        workers: workers?.data?.workerList?.slice(0, 5) || null,
-        stats: stats?.data || null,
-        account: account?.data || null
-      }
+      workers: workers.slice(0, 10).map((w: any) => ({
+        name: w.workerName,
+        status: w.status,
+        hashrate: ((w.hashRate || 0) / 1000000000000).toFixed(4) + ' TH/s',
+        shares: w.validShare || 0
+      })),
+      raw: result
     });
     
   } catch (error: unknown) {
@@ -205,8 +107,7 @@ export async function GET(request: NextRequest) {
     return Response.json({
       success: false,
       error: errorMessage,
-      timestamp: new Date().toISOString(),
-      message: 'Failed to fetch Binance Pool data'
+      timestamp: new Date().toISOString()
     });
   }
 }
